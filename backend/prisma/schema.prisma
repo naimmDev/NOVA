@@ -1,0 +1,245 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  SUPERADMIN
+  ADMIN
+  DOCENTE
+  ESTUDIANTE
+}
+
+enum Periodo {
+  SEMANAL
+  QUINCENAL
+}
+
+enum TipoNotificacion {
+  AGENDA
+  ANUNCIO
+  MENSAJE
+}
+
+model Usuario {
+  id           Int      @id @default(autoincrement())
+  codigo       String   @unique
+  nombre       String
+  apellido     String
+  email        String   @unique
+  passwordHash String
+  rol          Rol
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  gruposComoDocente       DocenteGrupo[]
+  asignaturasComoDocente  DocenteAsignatura[]
+  gruposComoEstudiante    EstudianteGrupo[]
+  agendasCreadas          Agenda[]             @relation("AgendaDocente")
+  agendasAsignadas        AgendaEstudiante[]
+  anunciosCreados         Anuncio[]
+  conversaciones          ConversacionUsuario[]
+  mensajesEnviados        Mensaje[]            @relation("MensajeRemitente")
+  lecturas                MensajeLectura[]
+  notificaciones          Notificacion[]
+  bitacora                Bitacora[]
+
+  @@map("usuarios")
+}
+
+model Grupo {
+  id     Int     @id @default(autoincrement())
+  nombre String  @unique
+  activo Boolean @default(true)
+
+  docentes    DocenteGrupo[]
+  estudiantes EstudianteGrupo[]
+  agendas     AgendaGrupo[]
+
+  @@map("grupos")
+}
+
+model Asignatura {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @unique
+  descripcion String?
+  activo      Boolean @default(true)
+
+  docentes DocenteAsignatura[]
+  agendas  Agenda[]
+
+  @@map("asignaturas")
+}
+
+model DocenteGrupo {
+  docenteId Int
+  grupoId   Int
+
+  docente Usuario @relation(fields: [docenteId], references: [id], onDelete: Cascade)
+  grupo   Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@id([docenteId, grupoId])
+  @@map("docentes_grupos")
+}
+
+model DocenteAsignatura {
+  docenteId    Int
+  asignaturaId Int
+
+  docente    Usuario    @relation(fields: [docenteId], references: [id], onDelete: Cascade)
+  asignatura Asignatura @relation(fields: [asignaturaId], references: [id], onDelete: Cascade)
+
+  @@id([docenteId, asignaturaId])
+  @@map("docentes_asignaturas")
+}
+
+model EstudianteGrupo {
+  estudianteId Int
+  grupoId      Int
+
+  estudiante Usuario @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+  grupo      Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@id([estudianteId, grupoId])
+  @@map("estudiantes_grupos")
+}
+
+model Agenda {
+  id             Int      @id @default(autoincrement())
+  docenteId      Int
+  asignaturaId   Int
+  periodo        Periodo
+  actividades    String
+  fechaInicio    DateTime
+  fechaFin       DateTime
+  observaciones  String?
+  publicada      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  docente    Usuario            @relation("AgendaDocente", fields: [docenteId], references: [id])
+  asignatura Asignatura         @relation(fields: [asignaturaId], references: [id])
+  grupos     AgendaGrupo[]
+  estudiantes AgendaEstudiante[]
+
+  @@map("agendas")
+}
+
+model AgendaGrupo {
+  agendaId Int
+  grupoId  Int
+
+  agenda Agenda @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  grupo  Grupo  @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@id([agendaId, grupoId])
+  @@map("agendas_grupos")
+}
+
+model AgendaEstudiante {
+  agendaId     Int
+  estudianteId Int
+
+  agenda     Agenda  @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  estudiante Usuario @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+
+  @@id([agendaId, estudianteId])
+  @@map("agendas_estudiantes")
+}
+
+model Anuncio {
+  id               Int       @id @default(autoincrement())
+  autorId          Int
+  titulo           String
+  contenido        String
+  publicado        Boolean   @default(false)
+  fechaCreacion    DateTime  @default(now())
+  fechaPublicacion DateTime?
+  fechaRetiro      DateTime?
+
+  autor Usuario @relation(fields: [autorId], references: [id])
+
+  @@map("anuncios")
+}
+
+model Conversacion {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participantes ConversacionUsuario[]
+  mensajes      Mensaje[]
+
+  @@map("conversaciones")
+}
+
+model ConversacionUsuario {
+  conversacionId Int
+  usuarioId      Int
+
+  conversacion Conversacion @relation(fields: [conversacionId], references: [id], onDelete: Cascade)
+  usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([conversacionId, usuarioId])
+  @@map("conversaciones_usuarios")
+}
+
+model Mensaje {
+  id             Int      @id @default(autoincrement())
+  conversacionId Int
+  remitenteId    Int
+  contenido      String
+  createdAt      DateTime @default(now())
+
+  conversacion Conversacion     @relation(fields: [conversacionId], references: [id], onDelete: Cascade)
+  remitente    Usuario          @relation("MensajeRemitente", fields: [remitenteId], references: [id])
+  lecturas     MensajeLectura[]
+
+  @@map("mensajes")
+}
+
+model MensajeLectura {
+  mensajeId Int
+  usuarioId Int
+  leidoAt   DateTime?
+
+  mensaje Mensaje @relation(fields: [mensajeId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([mensajeId, usuarioId])
+  @@map("mensajes_lectura")
+}
+
+model Notificacion {
+  id        Int               @id @default(autoincrement())
+  usuarioId Int
+  tipo      TipoNotificacion
+  titulo    String
+  mensaje   String
+  leida     Boolean           @default(false)
+  createdAt DateTime          @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("notificaciones")
+}
+
+model Bitacora {
+  id             Int      @id @default(autoincrement())
+  usuarioId      Int
+  accion         String
+  tablaAfectada  String
+  registroId     Int?
+  descripcion    String?
+  fecha          DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("bitacora")
+}
